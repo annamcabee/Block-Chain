@@ -68,5 +68,7 @@ def main():
     annaCoin.chain[1].data = {"account": "Anna","amount": 100,"action": "buy"}
     print "Chain valid? " + str(annaCoin.isChainValid())
 
-
-main()
+# Only run the main() function, if this is the root script running.
+# This allows importing this script file to use its functions inside other scripts.
+if __name__ == '__main__':
+    main()
