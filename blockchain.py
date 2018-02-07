@@ -1,74 +1,89 @@
-import json
+import collections
+import datetime
 import hashlib
+import json
 
 
-# Block Object
-class Block:
-    def __init__(self, index, timestamp, data, previousHash=' '):
-        self.index = index
-        self.timestamp = timestamp
+class InvalidBlockChain(BaseException):
+    pass
+
+
+class Block(object):
+    def __init__(self, data):
+        self.timestamp = str(datetime.datetime.utcnow().date)
+        self.index = None
+        self.previous_hash = None
         self.data = data
-        self.previousHash = previousHash
-        self.hash = self.calculateHash()
 
-    def calculateHash(self):
-        return hashlib.sha256(str(self.index) + self.previousHash + self.timestamp + json.dumps(self.data)).hexdigest()
+    @property
+    def hash(self):
+        return hashlib.sha256(
+            json.dumps(dict(
+                index=self.index,
+                timestamp=self.timestamp,
+                data=str(self.data),
+                previous_hash=self.previous_hash
+            )).encode('utf-8')).hexdigest()
 
-    def printBlock(self):
-        print "Block #" + str(self.index)
-        print "Account: " + str(self.data["account"])
-        print "Amount: " + str(self.data["amount"])
-        print "Block Hash: " + str(self.hash)
-        print "Block Previous Hash: " + str(self.previousHash)
-        print "---------------"
+    def __repr__(self):
+        return """
+         Block #{index}
+         Data:{data}
+         Block Hash:{hash}
+         Block Previous Hash: {previous_hash}
+        """.format(index=self.index, data=self.data, hash=self.hash, previous_hash=self.previous_hash)
 
 
-# Block Chain Object
-class BlockChain:
-    def __init__(self):
-        self.chain = [self.createGenesisBlock()]
+class BlockChain(object):
+    def __init__(self, *blocks):
+        self.chain = []
+        self.append(Block("Genesis Block"))
 
-    def createGenesisBlock(self):
-        return Block(0, "10/01/2017", "Genesis Block", "0")
+        for block in blocks:
+            self.append(block)
 
-    def getLatestBlock(self):
-        return self.chain[len(self.chain)-1]
+    def __len__(self):
+        return len(self.chain)
 
-    def addBlock(self, newBlock):
-        newBlock.previousHash = self.getLatestBlock().hash
-        newBlock.hash = newBlock.calculateHash()
-        self.chain.append(newBlock)
+    def __getitem__(self, index):
+        return self.chain.__getitem__(index)
 
-    def isChainValid(self):
-        for i in range (1, len(self.chain)):
-            currentBlock = self.chain[i]
-            previousBlock = self.chain[i-1]
-            # checks whether data has been tampered with
-            if currentBlock.hash != currentBlock.calculateHash():
-                return False
-            if currentBlock.previousHash != previousBlock.hash:
-                return False
-        return True
+    def append(self, block):
+        block.previous_hash = self.chain[-1].hash if self else ""
+        block.index = self.__len__()
+        self.chain.append(block)
 
-    def printBlockChain(self):
-        for i in range(1, len(self.chain)):
-            self.chain[i].printBlock()
+    def validate(self):
+        for previous_block, current_block in zip(self, self[1:]):
+            if not current_block.previous_hash == previous_block.hash:
+                raise InvalidBlockChain()
+
+    def __repr__(self):
+        return "------------".join([str(block) for block in self.chain])
 
 
 def main():
-    annaCoin = BlockChain()
-    annaCoin.addBlock(Block(1, "10/10/2017", {"account": "Anna","amount": 25,"action": "buy"}))
-    annaCoin.addBlock(Block(2, "11/01/2017", {"account": "Joe","amount": 10,"action": "buy"}))
-    annaCoin.addBlock(Block(3, "12/01/2017", {"account": "Katie","amount": 20,"action": "buy"}))
-    annaCoin.addBlock(Block(4, "12/07/2017", {"account": "Ethan","amount": 4,"action": "buy"}))
-    annaCoin.printBlockChain()
-    # no tampering in our block chain yet so should be true here
-    print "Chain valid? " + str(annaCoin.isChainValid())
-    # now lets tamper the block chain and see what happens
-    annaCoin.chain[1].data = {"account": "Anna","amount": 100,"action": "buy"}
-    print "Chain valid? " + str(annaCoin.isChainValid())
+    coin = BlockChain(
+        Block({"account": "Anna", "amount": 25, "action": "buy"}),
+        Block({"account": "Joe", "amount": 10, "action": "buy"}),
+        Block({"account": "Ethan", "amount": 4, "action": "buy"})
+    )
+    block = Block({"account": "Katie", "amount": 20, "action": "buy"})
+    coin.append(block)
+    try:
+        coin.validate()
+        print("Block chain is valid")
+    except InvalidBlockChain:
+        print("Block chain is invalid")
 
-# Only run the main() function, if this is the root script running.
-# This allows importing this script file to use its functions inside other scripts.
+    coin[1].data = {"account": "Anna", "amount": 100, "action": "buy"}
+
+    try:
+        coin.validate()
+        print("Block chain is valid")
+    except InvalidBlockChain:
+        print("Block chain is invalid")
+
+
 if __name__ == '__main__':
     main()
